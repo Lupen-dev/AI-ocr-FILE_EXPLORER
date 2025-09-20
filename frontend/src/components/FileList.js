@@ -1,46 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { FiSearch, FiDownload, FiTrash2, FiFile, FiEye } from 'react-icons/fi';
 import { fileService } from '../services/api';
+import FileDetailModal from './FileDetailModal';
+import SearchBar from './SearchBar';
 
 const Container = styled.div`
   background: white;
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-`;
-
-const SearchContainer = styled.div`
-  display: flex;
-  margin-bottom: 20px;
-`;
-
-const SearchInput = styled.input`
-  flex: 1;
-  padding: 12px 16px;
-  border: 1px solid #ddd;
-  border-radius: 4px 0 0 4px;
-  font-size: 16px;
-  outline: none;
-
-  &:focus {
-    border-color: #007bff;
-  }
-`;
-
-const SearchButton = styled.button`
-  padding: 12px 16px;
-  background-color: #007bff;
-  color: white;
-  border: 1px solid #007bff;
-  border-radius: 0 4px 4px 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-
-  &:hover {
-    background-color: #0056b3;
-  }
 `;
 
 const FileGrid = styled.div`
@@ -177,8 +146,10 @@ function FileList({ refreshTrigger }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [searchStats, setSearchStats] = useState(null);
 
-  const loadFiles = async (query = '', reset = false) => {
+  const loadFiles = useCallback(async (query = '', reset = false) => {
     setLoading(true);
     try {
       const currentOffset = reset ? 0 : offset;
@@ -193,20 +164,39 @@ function FileList({ refreshTrigger }) {
       }
       
       setHasMore(response.files.length === 50);
+      
+      // Arama istatistiklerini güncelle
+      setSearchStats({
+        total: response.total,
+        found: response.files.length,
+        query: query
+      });
     } catch (error) {
       console.error('Error loading files:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [offset]);
 
   useEffect(() => {
     loadFiles('', true);
-  }, [refreshTrigger]);
+  }, [refreshTrigger]); // loadFiles'i dependency olarak eklemeyelim çünkü sonsuz döngüye sebep olur
 
-  const handleSearch = () => {
+  const handleAdvancedSearch = (searchParams) => {
+    const { query, fileTypes, searchIn } = searchParams;
+    setSearchQuery(query);
     setOffset(0);
-    loadFiles(searchQuery, true);
+    
+    // Backend'e gönderilecek arama sorgusunu oluştur
+    let searchTerm = query;
+    
+    // Dosya türü filtresi varsa (backend'de bu özellik geliştirilebilir)
+    if (fileTypes.length > 0) {
+      // Şu an için sadece query'yi kullanıyoruz
+      // Gelecekte backend'de fileTypes parametresi eklenebilir
+    }
+    
+    loadFiles(searchTerm, true);
   };
 
   const handleDownload = async (file) => {
@@ -223,11 +213,23 @@ function FileList({ refreshTrigger }) {
       try {
         await fileService.deleteFile(file.id);
         setFiles(prev => prev.filter(f => f.id !== file.id));
+        
+        // İstatistikleri güncelle
+        if (searchStats) {
+          setSearchStats(prev => ({
+            ...prev,
+            total: prev.total - 1
+          }));
+        }
       } catch (error) {
         console.error('Delete error:', error);
         alert('Dosya silme hatası: ' + error.message);
       }
     }
+  };
+
+  const handleViewDetails = (file) => {
+    setSelectedFile(file);
   };
 
   const formatFileSize = (bytes) => {
@@ -244,18 +246,11 @@ function FileList({ refreshTrigger }) {
 
   return (
     <Container>
-      <SearchContainer>
-        <SearchInput
-          type="text"
-          placeholder="Dosya adı veya içeriğinde arama yapın..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-        />
-        <SearchButton onClick={handleSearch}>
-          <FiSearch />
-        </SearchButton>
-      </SearchContainer>
+      <SearchBar 
+        onSearch={handleAdvancedSearch}
+        searchStats={searchStats}
+        isLoading={loading}
+      />
 
       {files.length === 0 && !loading ? (
         <EmptyState>
@@ -292,6 +287,13 @@ function FileList({ refreshTrigger }) {
 
                 <FileActions>
                   <ActionButton 
+                    onClick={() => handleViewDetails(file)}
+                  >
+                    <FiEye size={14} />
+                    Detay
+                  </ActionButton>
+                  
+                  <ActionButton 
                     className="primary"
                     onClick={() => handleDownload(file)}
                   >
@@ -320,6 +322,15 @@ function FileList({ refreshTrigger }) {
             </LoadMore>
           )}
         </>
+      )}
+
+      {selectedFile && (
+        <FileDetailModal
+          file={selectedFile}
+          onClose={() => setSelectedFile(null)}
+          onDownload={handleDownload}
+          searchQuery={searchStats?.query || ''}
+        />
       )}
     </Container>
   );

@@ -23,6 +23,24 @@ DATABASE_DIR = Path("../database")
 UPLOAD_DIR.mkdir(exist_ok=True)
 DATABASE_DIR.mkdir(exist_ok=True)
 
+# Tesseract OCR Windows PATH ayarı
+import platform
+if platform.system() == "Windows":
+    # Windows'ta yaygın Tesseract kurulum yolları
+    possible_paths = [
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        r"C:\tesseract\tesseract.exe"
+    ]
+    
+    for path in possible_paths:
+        if Path(path).exists():
+            pytesseract.pytesseract.tesseract_cmd = path
+            print(f"Tesseract bulundu: {path}")
+            break
+    else:
+        print("Uyarı: Tesseract executable bulunamadı. PATH'te olduğundan emin olun.")
+
 # FastAPI uygulaması
 app = FastAPI(title="AI OCR File Explorer", version="1.0.0")
 
