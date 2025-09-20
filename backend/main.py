@@ -6,13 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 import aiofiles
-try:
-    import pytesseract
-    from PIL import Image
-    TESSERACT_AVAILABLE = True
-except ImportError:
-    print("Uyarı: Tesseract OCR bulunamadı. OCR özelliği çalışmayacak.")
-    TESSERACT_AVAILABLE = False
+import pytesseract
+from PIL import Image
 import PyPDF2
 import pandas as pd
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
@@ -102,9 +97,6 @@ async def extract_text_from_file(file_path: Path, file_type: str) -> str:
     try:
         if file_type in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']:
             # Resim dosyaları için OCR
-            if not TESSERACT_AVAILABLE:
-                return "OCR özelliği mevcut değil - Tesseract kurulmamış"
-            
             image = Image.open(file_path)
             text = pytesseract.image_to_string(image, lang='tur+eng')
             return text.strip()
@@ -117,10 +109,9 @@ async def extract_text_from_file(file_path: Path, file_type: str) -> str:
                 for page in pdf_reader.pages:
                     text += page.extract_text() + "\n"
             
-            # Eğer PDF'den metin çıkaramazsa OCR dene
-            if not text.strip() and TESSERACT_AVAILABLE:
-                # PDF'i resme çevir ve OCR uygula (gelişmiş uygulama için)
-                pass
+            # Eğer PDF'den metin çıkaramazsa OCR için bilgi ver
+            if not text.strip():
+                text = "PDF'den direkt metin çıkarılamadı. Görsel PDF için OCR gerekli."
             
             return text.strip()
         
