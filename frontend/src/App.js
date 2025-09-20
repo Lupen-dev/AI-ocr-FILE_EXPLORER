@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import FileUpload from './components/FileUpload';
 import FileList from './components/FileList';
+import FileExplorer from './components/FileExplorer';
+import FilePreview from './components/FilePreview';
+import SearchBar from './components/SearchBar';
+import { fileService } from './services/api';
 
 const AppContainer = styled.div`
   min-height: 100vh;
@@ -73,6 +77,39 @@ const StatLabel = styled.div`
   opacity: 0.9;
 `;
 
+const ViewToggle = styled.div`
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+`;
+
+const ViewButton = styled.button`
+  padding: 8px 16px;
+  border: 2px solid ${props => props.active ? '#3b82f6' : '#e5e7eb'};
+  background: ${props => props.active ? '#3b82f6' : 'white'};
+  color: ${props => props.active ? 'white' : '#374151'};
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #3b82f6;
+    ${props => !props.active && 'background-color: #f8fafc;'}
+  }
+`;
+
+const ExplorerLayout = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 24px;
+  margin-bottom: 30px;
+
+  @media (max-width: 1200px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
 const NetworkInfo = styled.div`
   background: #f8f9fa;
   padding: 15px;
@@ -94,12 +131,48 @@ const NetworkText = styled.p`
 
 function App() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [files, setFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [currentView, setCurrentView] = useState('explorer'); // 'explorer' | 'list'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleUploadComplete = (result) => {
     console.log('Upload completed:', result);
     // FileList'i yenilemek için trigger'ı güncelle
     setRefreshTrigger(prev => prev + 1);
+    loadFiles();
   };
+
+  const loadFiles = async (searchParams = { query: '', fileTypes: [], searchIn: ['fileName', 'ocrContent'] }) => {
+    setLoading(true);
+    try {
+      const response = await fileService.getFiles(searchParams.query, 100, 0);
+      setFiles(response.files);
+      setSearchQuery(searchParams.query);
+    } catch (error) {
+      console.error('Error loading files:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileSelect = (file) => {
+    setSelectedFile(file);
+  };
+
+  const handleDownload = async (file) => {
+    try {
+      await fileService.downloadFile(file.id);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Dosya indirme hatası: ' + error.message);
+    }
+  };
+
+  React.useEffect(() => {
+    loadFiles();
+  }, [refreshTrigger]);
 
   // Network bilgilerini al
   const getNetworkInfo = () => {
@@ -177,8 +250,45 @@ function App() {
         </Section>
 
         <Section>
-          <SectionTitle>📋 Dosya Listesi</SectionTitle>
-          <FileList refreshTrigger={refreshTrigger} />
+          <SectionTitle>� Gelişmiş Arama ve Dosya Yönetimi</SectionTitle>
+          <SearchBar 
+            onSearch={loadFiles}
+            searchStats={{ total: files.length, found: files.length }}
+            isLoading={loading}
+          />
+
+          <ViewToggle>
+            <ViewButton 
+              active={currentView === 'explorer'} 
+              onClick={() => setCurrentView('explorer')}
+            >
+              🗂️ Dosya Gezgini
+            </ViewButton>
+            <ViewButton 
+              active={currentView === 'list'} 
+              onClick={() => setCurrentView('list')}
+            >
+              📋 Liste Görünümü
+            </ViewButton>
+          </ViewToggle>
+
+          {currentView === 'explorer' ? (
+            <ExplorerLayout>
+              <FileExplorer 
+                files={files}
+                onFileSelect={handleFileSelect}
+                selectedFile={selectedFile}
+                searchQuery={searchQuery}
+              />
+              <FilePreview 
+                file={selectedFile}
+                onDownload={handleDownload}
+                searchQuery={searchQuery}
+              />
+            </ExplorerLayout>
+          ) : (
+            <FileList refreshTrigger={refreshTrigger} />
+          )}
         </Section>
       </MainContent>
     </AppContainer>
