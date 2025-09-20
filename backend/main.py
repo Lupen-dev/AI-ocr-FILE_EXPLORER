@@ -6,8 +6,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 import aiofiles
-import pytesseract
-from PIL import Image
+try:
+    import pytesseract
+    from PIL import Image
+    TESSERACT_AVAILABLE = True
+except ImportError:
+    print("Uyarı: Tesseract OCR bulunamadı. OCR özelliği çalışmayacak.")
+    TESSERACT_AVAILABLE = False
 import PyPDF2
 import pandas as pd
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
@@ -97,6 +102,9 @@ async def extract_text_from_file(file_path: Path, file_type: str) -> str:
     try:
         if file_type in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']:
             # Resim dosyaları için OCR
+            if not TESSERACT_AVAILABLE:
+                return "OCR özelliği mevcut değil - Tesseract kurulmamış"
+            
             image = Image.open(file_path)
             text = pytesseract.image_to_string(image, lang='tur+eng')
             return text.strip()
@@ -110,7 +118,7 @@ async def extract_text_from_file(file_path: Path, file_type: str) -> str:
                     text += page.extract_text() + "\n"
             
             # Eğer PDF'den metin çıkaramazsa OCR dene
-            if not text.strip():
+            if not text.strip() and TESSERACT_AVAILABLE:
                 # PDF'i resme çevir ve OCR uygula (gelişmiş uygulama için)
                 pass
             
@@ -133,7 +141,7 @@ async def extract_text_from_file(file_path: Path, file_type: str) -> str:
     
     except Exception as e:
         print(f"Metin çıkarma hatası: {e}")
-        return ""
+        return f"Hata: {str(e)}"
 
 def save_file_to_db(file_info: dict, ocr_content: str):
     """Dosya bilgilerini ve OCR içeriğini veritabanına kaydet"""
